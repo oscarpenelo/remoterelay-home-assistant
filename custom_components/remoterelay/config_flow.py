@@ -130,7 +130,11 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 device = paired.get("device", {})
                 device_id = str(device.get("deviceId") or self._discovered_device_id or uuid4())
-                await self.async_set_unique_id(device_id)
+                current_unique_id = getattr(self, "unique_id", None)
+                if current_unique_id is None:
+                    await self.async_set_unique_id(device_id)
+                elif str(current_unique_id) != device_id:
+                    return self.async_abort(reason="already_configured")
                 self._abort_if_unique_id_configured()
 
                 title = str(device.get("displayName") or self._discovered_display_name or "RemoteRelay")
