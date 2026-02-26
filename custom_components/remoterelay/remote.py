@@ -12,17 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, DOMAIN
+from .const import REMOTE_DIRECT_COMMANDS, REMOTE_NAV_KEYS
 
-NAV_KEYS = {"up", "down", "left", "right", "ok", "back", "home", "info"}
-DIRECT_COMMANDS = {
-    "play_pause",
-    "next_track",
-    "previous_track",
-    "volume_up",
-    "volume_down",
-    "mute_toggle",
-    "power_off",
-}
+NAV_KEYS = set(REMOTE_NAV_KEYS)
+DIRECT_COMMANDS = set(REMOTE_DIRECT_COMMANDS)
 
 
 async def async_setup_entry(

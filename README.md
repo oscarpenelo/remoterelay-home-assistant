@@ -24,14 +24,19 @@ Copiar `custom_components/remoterelay` dentro de tu configuracion de Home Assist
 - `api.py`: cliente local HTTP (skeleton funcional)
 - `media_player.py`: entidad base y WoL via HA
 - `remote.py`: entidad `remote` para flechas / home / back / info / media keys
+- `button.py`: botones plug-and-play (Device page) para mando
+- `select.py`: selector de input source (Device page)
 
 ## UX en Home Assistant (importante)
-Home Assistant no muestra automaticamente una UI tipo "Apple TV remote" para una entidad `media_player`.
-La integracion expone:
-- `media_player.remoterelay_*` -> power, volumen, mute, sources
-- `remote.remoterelay_*_remote` -> botones de mando (via `remote.send_command`)
+La integracion ya expone UI plug-and-play en la **Device page** (sin Lovelace manual) mediante:
+- `media_player.remoterelay_*` -> power, volumen, mute
+- `select.remoterelay_*_input_source` -> selector de sources
+- `button.remoterelay_*_*` -> botones de mando (flechas, OK, Back, Home, Info, etc.)
+- `remote.remoterelay_*_remote` -> entidad avanzada para automatizaciones y dashboards custom
 
-Para tener un mando visual, crea una card Lovelace con botones.
+### Limite de Home Assistant (importante)
+Home Assistant **no genera automaticamente** una card visual tipo "Apple TV Remote" como Apple Home.
+Para una UI tipo mando con D-pad en un dashboard, sigue siendo necesario crear una card Lovelace (manual).
 
 ### Ejemplo Lovelace (mando + sources)
 > Sustituye `media_player.current_pc` y `remote.current_pc_remote` por tus entity IDs reales.
