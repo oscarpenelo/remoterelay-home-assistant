@@ -42,7 +42,23 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovered_proto: str = "1"
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manual setup fallback if zeroconf is not available."""
+        """Zeroconf-first entry point."""
+        if self._pending_host:
+            return await self.async_step_pair()
+
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["wait_for_discovery", "manual"],
+        )
+
+    async def async_step_wait_for_discovery(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Explain that zeroconf discovery is the preferred flow."""
+        return self.async_abort(reason="wait_for_discovery")
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Manual setup fallback if zeroconf discovery is not available."""
         errors: dict[str, str] = {}
         if user_input is not None:
             self._pending_host = str(user_input[CONF_HOST]).strip()
@@ -57,7 +73,7 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_NAME, default="RemoteRelay"): str,
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="manual", data_schema=schema, errors=errors)
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> FlowResult:
         """Handle zeroconf discovery."""

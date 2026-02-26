@@ -3,7 +3,15 @@
     "step": {
       "user": {
         "title": "Connect to RemoteRelay",
-        "description": "Manual setup if Zeroconf discovery is not available.",
+        "description": "RemoteRelay is normally discovered automatically on your local network.",
+        "menu_options": {
+          "wait_for_discovery": "Use auto-discovery (recommended)",
+          "manual": "Manual setup (advanced)"
+        }
+      },
+      "manual": {
+        "title": "Manual setup",
+        "description": "Use this only if Zeroconf auto-discovery is not available.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -24,7 +32,8 @@
     },
     "abort": {
       "already_configured": "This RemoteRelay device is already configured.",
-      "not_supported": "The discovered service is missing required RemoteRelay metadata."
+      "not_supported": "The discovered service is missing required RemoteRelay metadata.",
+      "wait_for_discovery": "Open RemoteRelay, enable Home Assistant integration, then add the integration from the discovered device notification in Home Assistant."
     }
   }
 }
