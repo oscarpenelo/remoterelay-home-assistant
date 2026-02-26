@@ -1,0 +1,23 @@
+navigate:
+  name: Navigate remote key
+  description: Send a navigation key to a RemoteRelay media player entity.
+  target:
+    entity:
+      integration: remoterelay
+      domain: media_player
+  fields:
+    key:
+      name: Navigation key
+      description: Remote key to send.
+      required: true
+      selector:
+        select:
+          options:
+            - up
+            - down
+            - left
+            - right
+            - ok
+            - back
+            - home
+            - info

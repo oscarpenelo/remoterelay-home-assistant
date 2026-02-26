@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to RemoteRelay",
+        "description": "Manual setup if Zeroconf discovery is not available.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Display name"
+        }
+      },
+      "pair": {
+        "title": "Pair RemoteRelay",
+        "description": "Enter the pairing code shown in RemoteRelay for {name} ({host}:{port}).",
+        "data": {
+          "pairing_code": "Pairing code"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the RemoteRelay daemon.",
+      "invalid_auth": "Invalid or expired pairing code."
+    },
+    "abort": {
+      "already_configured": "This RemoteRelay device is already configured.",
+      "not_supported": "The discovered service is missing required RemoteRelay metadata."
+    }
+  }
+}
