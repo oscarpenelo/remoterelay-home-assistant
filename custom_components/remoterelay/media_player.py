@@ -23,16 +23,34 @@ from .const import (
     DOMAIN,
 )
 
-SUPPORT_FLAGS = (
-    MediaPlayerEntityFeature.TURN_ON
-    | MediaPlayerEntityFeature.TURN_OFF
-    | MediaPlayerEntityFeature.SELECT_SOURCE
-    | MediaPlayerEntityFeature.PLAY_PAUSE
-    | MediaPlayerEntityFeature.NEXT_TRACK
-    | MediaPlayerEntityFeature.PREVIOUS_TRACK
-    | MediaPlayerEntityFeature.VOLUME_STEP
-    | MediaPlayerEntityFeature.VOLUME_MUTE
-)
+def _build_support_flags() -> MediaPlayerEntityFeature:
+    flags = (
+        MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.SELECT_SOURCE
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.VOLUME_STEP
+        | MediaPlayerEntityFeature.VOLUME_MUTE
+    )
+
+    # Compatibility across Home Assistant versions:
+    # some versions expose PLAY_PAUSE, others only PLAY and PAUSE.
+    play_pause_flag = getattr(MediaPlayerEntityFeature, "PLAY_PAUSE", None)
+    if play_pause_flag is not None:
+        flags |= play_pause_flag
+    else:
+        play_flag = getattr(MediaPlayerEntityFeature, "PLAY", None)
+        pause_flag = getattr(MediaPlayerEntityFeature, "PAUSE", None)
+        if play_flag is not None:
+            flags |= play_flag
+        if pause_flag is not None:
+            flags |= pause_flag
+
+    return flags
+
+
+SUPPORT_FLAGS = _build_support_flags()
 
 _LOGGER = logging.getLogger(__name__)
 NAV_KEYS = {"up", "down", "left", "right", "ok", "back", "home", "info"}
@@ -157,6 +175,12 @@ class RemoteRelayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_media_play_pause(self) -> None:
+        await self._api.async_send_command({"command": "play_pause"})
+
+    async def async_media_play(self) -> None:
+        await self._api.async_send_command({"command": "play_pause"})
+
+    async def async_media_pause(self) -> None:
         await self._api.async_send_command({"command": "play_pause"})
 
     async def async_media_next_track(self) -> None:
