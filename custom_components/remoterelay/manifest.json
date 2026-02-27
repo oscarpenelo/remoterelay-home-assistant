@@ -1,7 +1,7 @@
 {
   "domain": "remoterelay",
   "name": "RemoteRelay",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "documentation": "https://github.com/remote-relay/remote-relay",
   "issue_tracker": "https://github.com/remote-relay/remote-relay/issues",
   "config_flow": true,
