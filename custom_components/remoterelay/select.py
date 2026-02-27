@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, DOMAIN
+from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, CONF_INPUT_SOURCES, CONF_SELECTED_SOURCE_ID, DOMAIN
 
 
 async def async_setup_entry(
@@ -50,7 +50,7 @@ class RemoteRelayInputSourceSelect(CoordinatorEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        selected_source_id = str((self.coordinator.data or {}).get("selectedSourceId") or "").strip()
+        selected_source_id = self._selected_source_id()
         if not selected_source_id:
             return None
         for src in self._sources():
@@ -75,8 +75,18 @@ class RemoteRelayInputSourceSelect(CoordinatorEntity, SelectEntity):
         await self.coordinator.async_request_refresh()
 
     def _sources(self) -> list[dict[str, Any]]:
-        raw = (self.coordinator.data or {}).get("inputSources") or []
+        data = self.coordinator.data or {}
+        raw = data.get("inputSources")
+        if not isinstance(raw, list):
+            raw = self._entry.data.get(CONF_INPUT_SOURCES, [])
         return [entry for entry in raw if isinstance(entry, dict)]
+
+    def _selected_source_id(self) -> str:
+        data = self.coordinator.data or {}
+        selected_source_id = data.get("selectedSourceId")
+        if selected_source_id is None:
+            selected_source_id = self._entry.data.get(CONF_SELECTED_SOURCE_ID)
+        return str(selected_source_id or "").strip()
 
     def _source_name_to_id(self, source_name: str) -> str | None:
         for src in self._sources():

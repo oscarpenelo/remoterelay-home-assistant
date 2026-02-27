@@ -13,7 +13,9 @@ from .api import RemoteRelayApiError, RemoteRelayLocalApiClient
 from .const import (
     CONF_DEVICE_ID,
     CONF_DISPLAY_NAME,
+    CONF_INPUT_SOURCES,
     CONF_MAC_ADDRESSES,
+    CONF_SELECTED_SOURCE_ID,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
 )
@@ -58,11 +60,26 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             next_data[CONF_DISPLAY_NAME] = profile_display_name
             changed = True
 
-        profile_macs = self._normalize_profile_macs(profile.get("macAddresses"))
-        current_macs = [str(mac).strip() for mac in current_data.get(CONF_MAC_ADDRESSES, []) if str(mac).strip()]
-        if profile_macs and profile_macs != current_macs:
-            next_data[CONF_MAC_ADDRESSES] = profile_macs
-            changed = True
+        if "macAddresses" in profile:
+            profile_macs = self._normalize_profile_macs(profile.get("macAddresses"))
+            current_macs = self._normalize_profile_macs(current_data.get(CONF_MAC_ADDRESSES, []))
+            if profile_macs != current_macs:
+                next_data[CONF_MAC_ADDRESSES] = profile_macs
+                changed = True
+
+        if "inputSources" in profile:
+            profile_sources = self._normalize_profile_sources(profile.get("inputSources"))
+            current_sources = self._normalize_profile_sources(current_data.get(CONF_INPUT_SOURCES, []))
+            if profile_sources != current_sources:
+                next_data[CONF_INPUT_SOURCES] = profile_sources
+                changed = True
+
+        if "selectedSourceId" in profile:
+            profile_selected_source = self._normalize_selected_source_id(profile.get("selectedSourceId"))
+            current_selected_source = self._normalize_selected_source_id(current_data.get(CONF_SELECTED_SOURCE_ID))
+            if profile_selected_source != current_selected_source:
+                next_data[CONF_SELECTED_SOURCE_ID] = profile_selected_source
+                changed = True
 
         if changed:
             self.hass.config_entries.async_update_entry(self.entry, data=next_data)
@@ -87,3 +104,39 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             seen.add(upper)
             normalized.append(candidate)
         return normalized
+
+    @staticmethod
+    def _normalize_profile_sources(value: Any) -> list[dict[str, str]]:
+        if not isinstance(value, list):
+            return []
+
+        normalized: list[dict[str, str]] = []
+        seen_ids: set[str] = set()
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+
+            source_id = str(item.get("id") or "").strip()
+            if not source_id:
+                continue
+
+            source_id_key = source_id.lower()
+            if source_id_key in seen_ids:
+                continue
+            seen_ids.add(source_id_key)
+
+            source_name = str(item.get("name") or "").strip() or "Unknown"
+            source_type = str(item.get("type") or "").strip()
+            normalized.append(
+                {
+                    "id": source_id,
+                    "name": source_name,
+                    "type": source_type,
+                }
+            )
+
+        return normalized
+
+    @staticmethod
+    def _normalize_selected_source_id(value: Any) -> str:
+        return str(value or "").strip()

@@ -19,7 +19,9 @@ from .const import (
     CONF_BROADCAST_ADDRESS,
     CONF_DEVICE_ID,
     CONF_DISPLAY_NAME,
+    CONF_INPUT_SOURCES,
     CONF_MAC_ADDRESSES,
+    CONF_SELECTED_SOURCE_ID,
     DOMAIN,
 )
 
@@ -135,11 +137,11 @@ class RemoteRelayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def source(self) -> str | None:
         """Return selected source name if available."""
-        selected = (self.coordinator.data or {}).get("selectedSourceId")
+        selected = self._selected_source_id()
         if not selected:
             return None
         for src in self._sources():
-            if src.get("id") == selected:
+            if str(src.get("id") or "") == selected:
                 return str(src.get("name"))
         return None
 
@@ -218,8 +220,17 @@ class RemoteRelayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     def _sources(self) -> list[dict[str, Any]]:
         data = self.coordinator.data or {}
-        raw_sources = data.get("inputSources") or []
+        raw_sources = data.get("inputSources")
+        if not isinstance(raw_sources, list):
+            raw_sources = self._entry.data.get(CONF_INPUT_SOURCES, [])
         return [src for src in raw_sources if isinstance(src, dict)]
+
+    def _selected_source_id(self) -> str:
+        data = self.coordinator.data or {}
+        selected = data.get("selectedSourceId")
+        if selected is None:
+            selected = self._entry.data.get(CONF_SELECTED_SOURCE_ID)
+        return str(selected or "").strip()
 
     def _source_name_to_id(self, source_name: str) -> str | None:
         for src in self._sources():

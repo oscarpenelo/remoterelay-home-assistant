@@ -19,8 +19,10 @@ from .const import (
     CONF_API_BASE_URL,
     CONF_DEVICE_ID,
     CONF_DISPLAY_NAME,
+    CONF_INPUT_SOURCES,
     CONF_MAC_ADDRESSES,
     CONF_PROTO_VERSION,
+    CONF_SELECTED_SOURCE_ID,
     DEFAULT_API_PORT,
     DOMAIN,
 )
@@ -143,6 +145,8 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DEVICE_ID: device_id,
                     CONF_DISPLAY_NAME: title,
                     CONF_MAC_ADDRESSES: [m.get("value") for m in device.get("macAddresses", []) if isinstance(m, dict)],
+                    CONF_INPUT_SOURCES: self._normalize_profile_sources(device.get("inputSources")),
+                    CONF_SELECTED_SOURCE_ID: str(device.get("selectedSourceId") or "").strip(),
                     CONF_PROTO_VERSION: str(device.get("protoVersion") or self._discovered_proto or "1"),
                     CONF_HOST: self._pending_host,
                     CONF_PORT: self._pending_port,
@@ -179,6 +183,38 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if isinstance(value, bytes):
             return value.decode(errors="ignore")
         return str(value)
+
+    @staticmethod
+    def _normalize_profile_sources(value: Any) -> list[dict[str, str]]:
+        if not isinstance(value, list):
+            return []
+
+        normalized: list[dict[str, str]] = []
+        seen_ids: set[str] = set()
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+
+            source_id = str(item.get("id") or "").strip()
+            if not source_id:
+                continue
+
+            source_id_key = source_id.lower()
+            if source_id_key in seen_ids:
+                continue
+            seen_ids.add(source_id_key)
+
+            source_name = str(item.get("name") or "").strip() or "Unknown"
+            source_type = str(item.get("type") or "").strip()
+            normalized.append(
+                {
+                    "id": source_id,
+                    "name": source_name,
+                    "type": source_type,
+                }
+            )
+
+        return normalized
 
 
 class RemoteRelayOptionsFlow(config_entries.OptionsFlow):
