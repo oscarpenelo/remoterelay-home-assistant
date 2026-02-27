@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, DOMAIN
+from .const import CONF_BROADCAST_ADDRESS, CONF_DEVICE_ID, CONF_DISPLAY_NAME, CONF_MAC_ADDRESSES, DOMAIN
 from .const import REMOTE_DIRECT_COMMANDS, REMOTE_NAV_KEYS
 
 NAV_KEYS = set(REMOTE_NAV_KEYS)
@@ -35,6 +35,7 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
 
     def __init__(self, entry: ConfigEntry, coordinator, api) -> None:
         super().__init__(coordinator)
+        self.hass = coordinator.hass
         self._entry = entry
         self._api = api
         device_id = entry.data.get(CONF_DEVICE_ID)
@@ -50,13 +51,25 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
 
     @property
     def available(self) -> bool:
-        """Remote requires daemon connectivity."""
-        return bool(self.coordinator.last_update_success)
+        """Expose entity as always available; state reflects daemon reachability."""
+        return True
 
     @property
     def is_on(self) -> bool | None:
         """Remote entity logical power mirrors daemon availability."""
         return bool(self.coordinator.last_update_success)
+
+    @property
+    def _mac_addresses(self) -> list[str]:
+        return [str(mac).strip() for mac in self._entry.data.get(CONF_MAC_ADDRESSES, []) if str(mac).strip()]
+
+    @property
+    def _broadcast_address(self) -> str | None:
+        value = self._entry.data.get(CONF_BROADCAST_ADDRESS)
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -69,8 +82,21 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """No-op: power-on is exposed via media_player turn_on (WoL)."""
-        return None
+        """Send Wake-on-LAN packets for all configured MAC addresses."""
+        if not self._mac_addresses:
+            raise ValueError("No MAC addresses configured for Wake-on-LAN.")
+
+        unique_macs = list(dict.fromkeys(str(mac).strip() for mac in self._mac_addresses if str(mac).strip()))
+        for mac in unique_macs:
+            service_data: dict[str, Any] = {"mac": mac}
+            if self._broadcast_address:
+                service_data["broadcast_address"] = self._broadcast_address
+            await self.hass.services.async_call(
+                "wake_on_lan",
+                "send_magic_packet",
+                service_data,
+                blocking=True,
+            )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Map remote off to daemon power-off."""

@@ -110,21 +110,22 @@ class RemoteRelayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def available(self) -> bool:
-        """Keep entity usable for WoL even if daemon is offline."""
-        return super().available or bool(self._mac_addresses)
+        """Expose entity as always available; state reflects daemon reachability."""
+        return True
 
     @property
     def state(self) -> MediaPlayerState | None:
         """Return media player state."""
+        if not self.coordinator.last_update_success:
+            return MediaPlayerState.OFF
+
         data = self.coordinator.data or {}
         power_state = str(data.get("powerState") or "unknown")
         if power_state == "on":
             return MediaPlayerState.ON
         if power_state == "off":
             return MediaPlayerState.OFF
-        if self._mac_addresses:
-            return MediaPlayerState.OFF
-        return None
+        return MediaPlayerState.ON
 
     @property
     def source_list(self) -> list[str]:
