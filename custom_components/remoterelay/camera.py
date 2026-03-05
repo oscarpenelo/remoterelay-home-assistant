@@ -1,4 +1,4 @@
-"""Camera entities for RemoteRelay webcam/screen snapshots."""
+"""Camera entities for RemoteRelay webcam/screen snapshots and stream_source."""
 
 from __future__ import annotations
 
@@ -6,6 +6,11 @@ import logging
 from typing import Any
 
 from homeassistant.components.camera import Camera
+
+try:
+    from homeassistant.components.camera.const import CameraEntityFeature
+except ImportError:  # pragma: no cover - compatibility with older HA builds
+    from homeassistant.components.camera import SUPPORT_STREAM as CameraEntityFeature  # type: ignore
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -86,6 +91,11 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
     """Camera entity backed by daemon snapshot endpoint."""
 
     _attr_should_poll = False
+    _attr_supported_features = (
+        CameraEntityFeature.STREAM
+        if hasattr(CameraEntityFeature, "STREAM")
+        else CameraEntityFeature
+    )
 
     def __init__(self, entry: ConfigEntry, coordinator, api, camera_id: str, camera_name: str) -> None:
         CoordinatorEntity.__init__(self, coordinator)
@@ -111,13 +121,28 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             _LOGGER.debug("RemoteRelay camera snapshot failed for %s: %s", self._camera_id, err)
             return None
 
+    async def stream_source(self) -> str | None:
+        camera_data = self._camera_data() or {}
+        stream_url = str(camera_data.get("streamUrl") or "").strip()
+        if stream_url:
+            # Local bridge defaults tuned for low latency in Home Assistant stream pipeline.
+            return self._api.build_camera_stream_url(
+                self._camera_id,
+                width=640,
+                height=360,
+                fps=15,
+            )
+        return None
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         camera_data = self._camera_data() or {}
+        stream_url = str(camera_data.get("streamUrl") or "").strip() or None
         return {
             "camera_id": self._camera_id,
             "camera_type": camera_data.get("cameraType"),
             "snapshot_url": camera_data.get("snapshotUrl"),
+            "stream_url": stream_url,
             "screen_device_id": camera_data.get("screenDeviceId"),
             "webcam_device_id": camera_data.get("webcamDeviceId"),
         }

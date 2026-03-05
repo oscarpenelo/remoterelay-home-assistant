@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import asyncio
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import aiohttp
 
@@ -36,6 +36,10 @@ class RemoteRelayLocalApiClient:
     @property
     def base_url(self) -> str:
         return self._base_url
+
+    @property
+    def token(self) -> str | None:
+        return self._token
 
     def with_token(self, token: str) -> "RemoteRelayLocalApiClient":
         return RemoteRelayLocalApiClient(self._session, self._base_url, token)
@@ -86,6 +90,32 @@ class RemoteRelayLocalApiClient:
         if height is not None:
             params["height"] = str(int(height))
         return await self._request_bytes("GET", path, params=params)
+
+    def build_camera_stream_url(
+        self,
+        camera_id: str,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        fps: int | None = None,
+        access_token: str | None = None,
+    ) -> str:
+        safe_camera_id = quote(str(camera_id or "").strip(), safe="")
+        path = f"/ha/v1/cameras/{safe_camera_id}/stream.mjpeg"
+        query: dict[str, str] = {}
+        token = str(access_token or self._token or "").strip()
+        if token:
+            query["access_token"] = token
+        if width is not None:
+            query["width"] = str(int(width))
+        if height is not None:
+            query["height"] = str(int(height))
+        if fps is not None:
+            query["fps"] = str(int(fps))
+        encoded_query = urlencode(query)
+        if encoded_query:
+            return f"{self._base_url}{path}?{encoded_query}"
+        return f"{self._base_url}{path}"
 
     async def _request_json(
         self,
