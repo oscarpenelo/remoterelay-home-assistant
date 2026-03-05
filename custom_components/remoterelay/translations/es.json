@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar RemoteRelay",
+        "description": "Recomendado: usa el autodescubrimiento Zeroconf cuando la app de escritorio RemoteRelay esté activa en la misma red. Si no aparece, usa la configuración manual con host y puerto.",
+        "menu_options": {
+          "wait_for_discovery": "Mostrar pasos de autodescubrimiento",
+          "manual": "Introducir host y puerto manualmente"
+        }
+      },
+      "manual": {
+        "title": "Configuración manual",
+        "description": "Usa la IP/hostname y el puerto que aparecen en RemoteRelay Desktop > Integrations > Home Assistant.",
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "name": "Nombre visible"
+        }
+      },
+      "pair": {
+        "title": "Vincular RemoteRelay",
+        "description": "En RemoteRelay Desktop, habilita Home Assistant y copia el código de vinculación actual. Después introdúcelo aquí para {name} ({host}:{port}).",
+        "data": {
+          "pairing_code": "Código de vinculación"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar con el daemon de RemoteRelay.",
+      "invalid_auth": "Código de vinculación inválido o caducado.",
+      "pairing_not_enabled": "La vinculación no está habilitada en RemoteRelay. Abre la app de escritorio, activa Home Assistant y regenera el código de vinculación."
+    },
+    "abort": {
+      "already_configured": "Este dispositivo RemoteRelay ya está configurado.",
+      "already_in_progress": "Ya hay una configuración de RemoteRelay en curso. Cierra el diálogo actual y vuelve a intentarlo.",
+      "not_supported": "El servicio descubierto no incluye los metadatos requeridos de RemoteRelay.",
+      "wait_for_discovery": "Este asistente no se queda esperando en segundo plano. Pasos: (1) Abre RemoteRelay Desktop, (2) activa Home Assistant, (3) en Home Assistant espera la notificación de dispositivo descubierto o usa la configuración manual con host/puerto."
+    }
+  }
+}

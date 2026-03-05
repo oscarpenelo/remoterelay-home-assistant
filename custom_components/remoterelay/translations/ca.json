@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connectar RemoteRelay",
+        "description": "Recomanat: fes servir l'autodescobriment Zeroconf quan l'app d'escriptori RemoteRelay estigui activa a la mateixa xarxa. Si no apareix, usa la configuració manual amb host i port.",
+        "menu_options": {
+          "wait_for_discovery": "Mostrar passos d'autodescobriment",
+          "manual": "Introduir host i port manualment"
+        }
+      },
+      "manual": {
+        "title": "Configuració manual",
+        "description": "Fes servir la IP/hostname i el port que apareixen a RemoteRelay Desktop > Integrations > Home Assistant.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Nom visible"
+        }
+      },
+      "pair": {
+        "title": "Vincular RemoteRelay",
+        "description": "A RemoteRelay Desktop, habilita Home Assistant i copia el codi de vinculació actual. Després introdueix-lo aquí per a {name} ({host}:{port}).",
+        "data": {
+          "pairing_code": "Codi de vinculació"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No s'ha pogut connectar amb el daemon de RemoteRelay.",
+      "invalid_auth": "Codi de vinculació invàlid o caducat.",
+      "pairing_not_enabled": "La vinculació no està habilitada a RemoteRelay. Obre l'app d'escriptori, activa Home Assistant i regenera el codi de vinculació."
+    },
+    "abort": {
+      "already_configured": "Aquest dispositiu RemoteRelay ja està configurat.",
+      "already_in_progress": "Ja hi ha una configuració de RemoteRelay en curs. Tanca el diàleg actual i torna-ho a provar.",
+      "not_supported": "El servei descobert no inclou les metadades requerides de RemoteRelay.",
+      "wait_for_discovery": "Aquest assistent no es queda esperant en segon pla. Passos: (1) Obre RemoteRelay Desktop, (2) activa Home Assistant, (3) a Home Assistant espera la notificació de dispositiu descobert o usa la configuració manual amb host/port."
+    }
+  }
+}

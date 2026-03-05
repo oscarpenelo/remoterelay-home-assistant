@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 from typing import Any
 from urllib.parse import quote
 
@@ -127,6 +128,8 @@ class RemoteRelayLocalApiClient:
                 return data
         except aiohttp.ClientError as err:
             raise RemoteRelayApiError(str(err)) from err
+        except asyncio.TimeoutError as err:
+            raise RemoteRelayApiError("Request timed out.") from err
 
     async def _request_bytes(
         self,
@@ -173,6 +176,8 @@ class RemoteRelayLocalApiClient:
                 return data
         except aiohttp.ClientError as err:
             raise RemoteRelayApiError(str(err)) from err
+        except asyncio.TimeoutError as err:
+            raise RemoteRelayApiError("Request timed out.") from err
 
     def _build_headers(self, *, authenticated: bool) -> dict[str, str]:
         headers: dict[str, str] = {}
