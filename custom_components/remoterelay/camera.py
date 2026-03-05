@@ -7,10 +7,18 @@ from typing import Any
 
 from homeassistant.components.camera import Camera
 
-try:
-    from homeassistant.components.camera.const import CameraEntityFeature
+CAMERA_SUPPORT_STREAM = 0
+try:  # Newer HA variants
+    from homeassistant.components.camera import CameraEntityFeature  # type: ignore
+
+    CAMERA_SUPPORT_STREAM = int(getattr(CameraEntityFeature, "STREAM", 0))
 except ImportError:  # pragma: no cover - compatibility with older HA builds
-    from homeassistant.components.camera import SUPPORT_STREAM as CameraEntityFeature  # type: ignore
+    try:
+        from homeassistant.components.camera.const import SUPPORT_STREAM  # type: ignore
+
+        CAMERA_SUPPORT_STREAM = int(SUPPORT_STREAM)
+    except ImportError:  # pragma: no cover - fallback when stream flag is unavailable
+        CAMERA_SUPPORT_STREAM = 0
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -91,11 +99,7 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
     """Camera entity backed by daemon snapshot endpoint."""
 
     _attr_should_poll = False
-    _attr_supported_features = (
-        CameraEntityFeature.STREAM
-        if hasattr(CameraEntityFeature, "STREAM")
-        else CameraEntityFeature
-    )
+    _attr_supported_features = CAMERA_SUPPORT_STREAM
 
     def __init__(self, entry: ConfigEntry, coordinator, api, camera_id: str, camera_name: str) -> None:
         CoordinatorEntity.__init__(self, coordinator)
