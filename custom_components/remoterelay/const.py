@@ -19,7 +19,7 @@ CONF_BROADCAST_ADDRESS = "broadcast_address"
 CONF_PROTO_VERSION = "proto_version"
 CONF_API_BASE_URL = "api_base_url"
 
-API_TIMEOUT_SECONDS = 5
+API_TIMEOUT_SECONDS = 10
 API_HEADER_AUTHORIZATION = "Authorization"
 
 REMOTE_NAV_KEYS = ("up", "down", "left", "right", "ok", "back", "home", "info")
@@ -33,21 +33,71 @@ REMOTE_DIRECT_COMMANDS = (
     "power_off",
 )
 
-# Button entities exposed for plug-and-play control on the HA Device page.
-REMOTE_BUTTONS = (
-    {"key": "home", "label": "Home", "icon": "mdi:home"},
-    {"key": "back", "label": "Back", "icon": "mdi:arrow-left"},
-    {"key": "info", "label": "Info", "icon": "mdi:information-outline"},
-    {"key": "up", "label": "Up", "icon": "mdi:chevron-up"},
-    {"key": "left", "label": "Left", "icon": "mdi:chevron-left"},
-    {"key": "ok", "label": "OK", "icon": "mdi:check-circle-outline"},
-    {"key": "right", "label": "Right", "icon": "mdi:chevron-right"},
-    {"key": "down", "label": "Down", "icon": "mdi:chevron-down"},
-    {"key": "play_pause", "label": "Play/Pause", "icon": "mdi:play-pause"},
-    {"key": "next_track", "label": "Next", "icon": "mdi:skip-next"},
-    {"key": "previous_track", "label": "Previous", "icon": "mdi:skip-previous"},
-    {"key": "volume_up", "label": "Volume Up", "icon": "mdi:volume-plus"},
-    {"key": "volume_down", "label": "Volume Down", "icon": "mdi:volume-minus"},
-    {"key": "mute_toggle", "label": "Mute", "icon": "mdi:volume-mute"},
-    {"key": "power_off", "label": "Power Off", "icon": "mdi:power"},
-)
+REMOTE_COMMAND_ALIASES: dict[str, str] = {
+    "power_off": "power_toggle",
+    "off": "power_toggle",
+    "power": "power_toggle",
+    "volume_up": "vol_up",
+    "vol_up": "vol_up",
+    "volume_down": "vol_down",
+    "vol_down": "vol_down",
+    "mute": "mute_toggle",
+    "playpause": "play_pause",
+    "play-pause": "play_pause",
+    "next": "next_track",
+    "previous": "previous_track",
+    "prev": "previous_track",
+    "enter": "ok",
+    "select": "ok",
+    "return": "back",
+}
+
+DEFAULT_REMOTE_KEY_LABELS: dict[str, str] = {
+    "power_toggle": "Power",
+    "home": "Home",
+    "back": "Back",
+    "previous_track": "Previous",
+    "play_pause": "Play/Pause",
+    "next_track": "Next",
+    "info": "Info",
+    "mute_toggle": "Mute",
+    "ok": "OK",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "vol_up": "Volume Up",
+    "vol_down": "Volume Down",
+    "channel_up": "Channel Up",
+    "channel_down": "Channel Down",
+    "num_0": "0",
+    "num_1": "1",
+    "num_2": "2",
+    "num_3": "3",
+    "num_4": "4",
+    "num_5": "5",
+    "num_6": "6",
+    "num_7": "7",
+    "num_8": "8",
+    "num_9": "9",
+}
+
+DEFAULT_REMOTE_KEY_ICONS: dict[str, str] = {
+    "power_toggle": "mdi:power",
+    "home": "mdi:home",
+    "back": "mdi:arrow-left",
+    "info": "mdi:information-outline",
+    "up": "mdi:chevron-up",
+    "left": "mdi:chevron-left",
+    "ok": "mdi:check-circle-outline",
+    "right": "mdi:chevron-right",
+    "down": "mdi:chevron-down",
+    "play_pause": "mdi:play-pause",
+    "next_track": "mdi:skip-next",
+    "previous_track": "mdi:skip-previous",
+    "vol_up": "mdi:volume-plus",
+    "vol_down": "mdi:volume-minus",
+    "mute_toggle": "mdi:volume-mute",
+    "channel_up": "mdi:chevron-up-circle-outline",
+    "channel_down": "mdi:chevron-down-circle-outline",
+}

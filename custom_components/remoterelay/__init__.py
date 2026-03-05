@@ -13,7 +13,15 @@ from .api import RemoteRelayLocalApiClient
 from .const import CONF_ACCESS_TOKEN, CONF_API_BASE_URL, DOMAIN
 from .coordinator import RemoteRelayCoordinator
 
-PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER, Platform.REMOTE, Platform.BUTTON, Platform.SELECT]
+PLATFORMS: list[Platform] = [
+    Platform.MEDIA_PLAYER,
+    Platform.REMOTE,
+    Platform.BUTTON,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.CAMERA,
+]
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -63,27 +65,103 @@ class RemoteRelayLocalApiClient:
     async def async_send_command(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self._request_json("POST", "/ha/v1/commands", json=payload)
 
+    async def async_get_camera_snapshot(
+        self,
+        camera_id: str,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+    ) -> bytes:
+        safe_camera_id = quote(str(camera_id or "").strip(), safe="")
+        path = f"/ha/v1/cameras/{safe_camera_id}/snapshot"
+        params: dict[str, str] = {}
+        if width is not None:
+            params["width"] = str(int(width))
+        if height is not None:
+            params["height"] = str(int(height))
+        return await self._request_bytes("GET", path, params=params)
+
     async def _request_json(
         self,
         method: str,
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         authenticated: bool = True,
     ) -> dict[str, Any]:
-        headers: dict[str, str] = {}
-        if authenticated and self._token:
-            headers[API_HEADER_AUTHORIZATION] = f"Bearer {self._token}"
+        headers = self._build_headers(authenticated=authenticated)
 
         url = f"{self._base_url}{path}"
         timeout = aiohttp.ClientTimeout(total=API_TIMEOUT_SECONDS)
         try:
-            async with self._session.request(method, url, json=json, headers=headers, timeout=timeout) as resp:
-                data = await resp.json(content_type=None)
+            async with self._session.request(
+                method,
+                url,
+                json=json,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            ) as resp:
+                try:
+                    data = await resp.json(content_type=None)
+                except (aiohttp.ContentTypeError, ValueError):
+                    data = None
+
                 if resp.status >= 400:
-                    raise RemoteRelayApiError(data.get("message", f"HTTP {resp.status}"))
+                    if isinstance(data, dict):
+                        raise RemoteRelayApiError(data.get("message", f"HTTP {resp.status}"))
+                    raw_text = await resp.text()
+                    raise RemoteRelayApiError(raw_text or f"HTTP {resp.status}")
                 if not isinstance(data, dict):
                     raise RemoteRelayApiError("Invalid JSON response type.")
                 return data
         except aiohttp.ClientError as err:
             raise RemoteRelayApiError(str(err)) from err
+
+    async def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+        authenticated: bool = True,
+    ) -> bytes:
+        headers = self._build_headers(authenticated=authenticated)
+        url = f"{self._base_url}{path}"
+        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT_SECONDS)
+        try:
+            async with self._session.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            ) as resp:
+                data = await resp.read()
+                if resp.status >= 400:
+                    error_message = f"HTTP {resp.status}"
+                    payload = None
+                    if data:
+                        try:
+                            decoded = data.decode(errors="ignore")
+                            parsed = json.loads(decoded)
+                            payload = parsed if isinstance(parsed, dict) else None
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            payload = None
+                    if isinstance(payload, dict):
+                        error_message = str(payload.get("message") or error_message)
+                    elif data:
+                        error_message = data.decode(errors="ignore") or error_message
+                    raise RemoteRelayApiError(error_message)
+                if not data:
+                    raise RemoteRelayApiError("Empty binary response.")
+                return data
+        except aiohttp.ClientError as err:
+            raise RemoteRelayApiError(str(err)) from err
+
+    def _build_headers(self, *, authenticated: bool) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if authenticated and self._token:
+            headers[API_HEADER_AUTHORIZATION] = f"Bearer {self._token}"
+        return headers

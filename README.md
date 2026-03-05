@@ -3,7 +3,7 @@
 Estado: scaffold inicial para arrancar la PoC de Home Assistant con:
 - zeroconf autodiscovery del daemon (`_remoterelay._tcp.local`)
 - config flow con paso de pairing local (codigo temporal)
-- entidad unica `media_player`
+- entidad principal `media_player`
 - `turn_on` via WoL desde Home Assistant (sin segundo dispositivo)
 
 ## Objetivo del scaffold
@@ -26,6 +26,9 @@ Copiar `custom_components/remoterelay` dentro de tu configuracion de Home Assist
 - `remote.py`: entidad `remote` para flechas / home / back / info / media keys
 - `button.py`: botones plug-and-play (Device page) para mando
 - `select.py`: selector de input source (Device page)
+- `sensor.py`: sensores numericos (predefinidos + custom `number`)
+- `binary_sensor.py`: sensores custom `binary`
+- `camera.py`: camaras (`screen` y `webcam`) usando snapshots del daemon
 
 ## UX en Home Assistant (importante)
 La integracion ya expone UI plug-and-play en la **Device page** (sin Lovelace manual) mediante:

@@ -12,10 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_BROADCAST_ADDRESS, CONF_DEVICE_ID, CONF_DISPLAY_NAME, CONF_MAC_ADDRESSES, DOMAIN
-from .const import REMOTE_DIRECT_COMMANDS, REMOTE_NAV_KEYS
+from .const import REMOTE_COMMAND_ALIASES, REMOTE_DIRECT_COMMANDS, REMOTE_NAV_KEYS
 
 NAV_KEYS = set(REMOTE_NAV_KEYS)
-DIRECT_COMMANDS = set(REMOTE_DIRECT_COMMANDS)
+LEGACY_DIRECT_COMMANDS = set(REMOTE_DIRECT_COMMANDS)
 
 
 async def async_setup_entry(
@@ -26,6 +26,37 @@ async def async_setup_entry(
     """Set up RemoteRelay remote entity from a config entry."""
     runtime = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([RemoteRelayRemoteEntity(entry, runtime["coordinator"], runtime["api"])])
+
+
+def _normalize_remote_token(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _normalize_profile_remote_keys(data: dict[str, Any]) -> set[str]:
+    normalized: set[str] = set()
+
+    raw_definitions = data.get("remoteKeyDefinitions")
+    if isinstance(raw_definitions, list):
+        for entry in raw_definitions:
+            if not isinstance(entry, dict):
+                continue
+            key_id = _normalize_remote_token(entry.get("id"))
+            if key_id:
+                normalized.add(key_id)
+
+    if normalized:
+        return normalized
+
+    capabilities = data.get("capabilities")
+    if isinstance(capabilities, dict):
+        raw_keys = capabilities.get("remoteKeys")
+        if isinstance(raw_keys, list):
+            for item in raw_keys:
+                key_id = _normalize_remote_token(item)
+                if key_id:
+                    normalized.add(key_id)
+
+    return normalized
 
 
 class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
@@ -100,7 +131,12 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Map remote off to daemon power-off."""
-        await self._api.async_send_command({"command": "power_off"})
+        supports_remote_key = self._supports_remote_key_command()
+        key_id = "power_toggle" if supports_remote_key and "power_toggle" in self._available_remote_keys() else None
+        if key_id:
+            await self._api.async_send_command({"command": "remote_key", "keyId": key_id})
+        else:
+            await self._api.async_send_command({"command": "power_off"})
         await self.coordinator.async_request_refresh()
 
     async def async_send_command(self, command: list[str] | str, **kwargs: Any) -> None:
@@ -136,11 +172,18 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
                 continue
 
     async def _dispatch_command(self, command: str) -> None:
+        key_id = self._resolve_remote_key_id(command)
+        if key_id and self._supports_remote_key_command():
+            await self._api.async_send_command({"command": "remote_key", "keyId": key_id})
+            if key_id == "power_toggle":
+                await self.coordinator.async_request_refresh()
+            return
+
+        # Legacy fallback for older daemon versions.
         if command in NAV_KEYS:
             await self._api.async_send_command({"command": "navigate", "key": command})
             return
-
-        if command in DIRECT_COMMANDS:
+        if command in LEGACY_DIRECT_COMMANDS:
             await self._api.async_send_command({"command": command})
             if command == "power_off":
                 await self.coordinator.async_request_refresh()
@@ -148,15 +191,49 @@ class RemoteRelayRemoteEntity(CoordinatorEntity, RemoteEntity):
 
         raise ValueError(f"Unsupported remote command: {command}")
 
+    def _available_remote_keys(self) -> set[str]:
+        data = self.coordinator.data or {}
+        return _normalize_profile_remote_keys(data)
+
+    def _supports_remote_key_command(self) -> bool:
+        data = self.coordinator.data or {}
+        raw = data.get("remoteKeyDefinitions")
+        return isinstance(raw, list) and len(raw) > 0
+
+    def _resolve_remote_key_id(self, command: str) -> str | None:
+        available = self._available_remote_keys()
+        if not available:
+            return None
+
+        normalized = _normalize_remote_token(command)
+        if normalized in available:
+            return normalized
+
+        alias_candidate = _normalize_remote_token(REMOTE_COMMAND_ALIASES.get(normalized))
+        if alias_candidate and alias_candidate in available:
+            return alias_candidate
+
+        # Backward-compat aliases expected by users/service calls.
+        if normalized.startswith("number_"):
+            number_alias = f"num_{normalized.split('_')[-1]}"
+            if number_alias in available:
+                return number_alias
+        if normalized.isdigit() and len(normalized) == 1:
+            number_alias = f"num_{normalized}"
+            if number_alias in available:
+                return number_alias
+        return None
+
     @staticmethod
     def _normalize_command(value: Any) -> str:
-        normalized = str(value or "").strip().lower()
+        normalized = _normalize_remote_token(value)
+        if not normalized:
+            return ""
         aliases = {
             "enter": "ok",
             "select": "ok",
             "return": "back",
             "playpause": "play_pause",
-            "play-pause": "play_pause",
             "next": "next_track",
             "previous": "previous_track",
             "prev": "previous_track",
