@@ -14,6 +14,11 @@ from .const import API_HEADER_AUTHORIZATION, API_TIMEOUT_SECONDS
 class RemoteRelayApiError(Exception):
     """Base API error."""
 
+    def __init__(self, message: str, *, code: str | None = None, status: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status = status
+
 
 class RemoteRelayPairingError(RemoteRelayApiError):
     """Pairing-specific error."""
@@ -57,7 +62,7 @@ class RemoteRelayLocalApiClient:
                 authenticated=False,
             )
         except RemoteRelayApiError as err:
-            raise RemoteRelayPairingError(str(err)) from err
+            raise RemoteRelayPairingError(str(err), code=err.code, status=err.status) from err
 
     async def async_get_device_profile(self) -> dict[str, Any]:
         return await self._request_json("GET", "/ha/v1/device")
@@ -110,9 +115,13 @@ class RemoteRelayLocalApiClient:
 
                 if resp.status >= 400:
                     if isinstance(data, dict):
-                        raise RemoteRelayApiError(data.get("message", f"HTTP {resp.status}"))
+                        raise RemoteRelayApiError(
+                            str(data.get("message") or f"HTTP {resp.status}"),
+                            code=str(data.get("code") or "").strip() or None,
+                            status=resp.status,
+                        )
                     raw_text = await resp.text()
-                    raise RemoteRelayApiError(raw_text or f"HTTP {resp.status}")
+                    raise RemoteRelayApiError(raw_text or f"HTTP {resp.status}", status=resp.status)
                 if not isinstance(data, dict):
                     raise RemoteRelayApiError("Invalid JSON response type.")
                 return data
@@ -151,9 +160,14 @@ class RemoteRelayLocalApiClient:
                             payload = None
                     if isinstance(payload, dict):
                         error_message = str(payload.get("message") or error_message)
+                        raise RemoteRelayApiError(
+                            error_message,
+                            code=str(payload.get("code") or "").strip() or None,
+                            status=resp.status,
+                        )
                     elif data:
                         error_message = data.decode(errors="ignore") or error_message
-                    raise RemoteRelayApiError(error_message)
+                    raise RemoteRelayApiError(error_message, status=resp.status)
                 if not data:
                     raise RemoteRelayApiError("Empty binary response.")
                 return data

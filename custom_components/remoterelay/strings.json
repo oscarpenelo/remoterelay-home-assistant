@@ -2,16 +2,16 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to RemoteRelay",
-        "description": "RemoteRelay is normally discovered automatically on your local network.",
+        "title": "Connect RemoteRelay",
+        "description": "Recommended: use Zeroconf auto-discovery when the RemoteRelay desktop app is running on the same LAN. If discovery does not appear, use manual setup with host and port.",
         "menu_options": {
-          "wait_for_discovery": "Use auto-discovery (recommended)",
-          "manual": "Manual setup (advanced)"
+          "wait_for_discovery": "Show auto-discovery steps",
+          "manual": "Enter host and port manually"
         }
       },
       "manual": {
         "title": "Manual setup",
-        "description": "Use this only if Zeroconf auto-discovery is not available.",
+        "description": "Use the IP/hostname and port shown in RemoteRelay Desktop > Integrations > Home Assistant.",
         "data": {
           "host": "Host",
           "port": "Port",
@@ -20,7 +20,7 @@
       },
       "pair": {
         "title": "Pair RemoteRelay",
-        "description": "Enter the pairing code shown in RemoteRelay for {name} ({host}:{port}).",
+        "description": "In RemoteRelay Desktop, enable Home Assistant and copy the current pairing code. Then enter it here for {name} ({host}:{port}).",
         "data": {
           "pairing_code": "Pairing code"
         }
@@ -28,12 +28,13 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the RemoteRelay daemon.",
-      "invalid_auth": "Invalid or expired pairing code."
+      "invalid_auth": "Invalid or expired pairing code.",
+      "pairing_not_enabled": "Pairing is not enabled in RemoteRelay. Open the desktop app, enable Home Assistant and refresh the pairing code."
     },
     "abort": {
       "already_configured": "This RemoteRelay device is already configured.",
       "not_supported": "The discovered service is missing required RemoteRelay metadata.",
-      "wait_for_discovery": "Open RemoteRelay, enable Home Assistant integration, then add the integration from the discovered device notification in Home Assistant."
+      "wait_for_discovery": "This wizard does not keep waiting in background. Steps: (1) Open RemoteRelay Desktop, (2) enable Home Assistant, (3) in Home Assistant wait for the discovered device notification, or use manual setup with host/port."
     }
   }
 }
