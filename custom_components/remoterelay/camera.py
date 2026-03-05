@@ -114,9 +114,9 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
 
     @property
     def available(self) -> bool:
-        if not self.coordinator.last_update_success:
-            return False
-        return self._camera_data() is not None
+        # Keep camera entities available even if one coordinator refresh fails.
+        # Streaming/snapshots can still work while /device polling is intermittent.
+        return True
 
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
         try:
@@ -126,26 +126,24 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             return None
 
     async def stream_source(self) -> str | None:
-        camera_data = self._camera_data() or {}
-        stream_url = str(camera_data.get("streamUrl") or "").strip()
-        if stream_url:
-            # Local bridge defaults tuned for low latency in Home Assistant stream pipeline.
-            return self._api.build_camera_stream_url(
-                self._camera_id,
-                width=640,
-                height=360,
-                fps=15,
-            )
-        return None
+        # Build stream source directly from known camera id to avoid coordinator
+        # availability dependencies for stream playback.
+        return self._api.build_camera_stream_url(
+            self._camera_id,
+            width=640,
+            height=360,
+            fps=15,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         camera_data = self._camera_data() or {}
-        stream_url = str(camera_data.get("streamUrl") or "").strip() or None
+        stream_url = str(camera_data.get("streamUrl") or "").strip() or f"/ha/v1/cameras/{self._camera_id}/stream.mjpeg"
+        snapshot_url = str(camera_data.get("snapshotUrl") or "").strip() or f"/ha/v1/cameras/{self._camera_id}/snapshot"
         return {
             "camera_id": self._camera_id,
             "camera_type": camera_data.get("cameraType"),
-            "snapshot_url": camera_data.get("snapshotUrl"),
+            "snapshot_url": snapshot_url,
             "stream_url": stream_url,
             "screen_device_id": camera_data.get("screenDeviceId"),
             "webcam_device_id": camera_data.get("webcamDeviceId"),
