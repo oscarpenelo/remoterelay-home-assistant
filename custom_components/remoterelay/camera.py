@@ -11,12 +11,12 @@ CAMERA_SUPPORT_STREAM = 0
 try:  # Newer HA variants
     from homeassistant.components.camera import CameraEntityFeature  # type: ignore
 
-    CAMERA_SUPPORT_STREAM = int(getattr(CameraEntityFeature, "STREAM", 0))
+    CAMERA_SUPPORT_STREAM = getattr(CameraEntityFeature, "STREAM", 0)
 except ImportError:  # pragma: no cover - compatibility with older HA builds
     try:
         from homeassistant.components.camera.const import SUPPORT_STREAM  # type: ignore
 
-        CAMERA_SUPPORT_STREAM = int(SUPPORT_STREAM)
+        CAMERA_SUPPORT_STREAM = SUPPORT_STREAM
     except ImportError:  # pragma: no cover - fallback when stream flag is unavailable
         CAMERA_SUPPORT_STREAM = 0
 from homeassistant.config_entries import ConfigEntry
