@@ -143,12 +143,25 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
                 )
                 await response.prepare(request)
 
-                async for chunk in upstream.content.iter_chunked(64 * 1024):
+                while True:
+                    transport = request.transport
+                    if transport is None or transport.is_closing():
+                        break
+                    if upstream.content.at_eof():
+                        break
+                    try:
+                        chunk = await asyncio.wait_for(
+                            upstream.content.readany(),
+                            timeout=1.0,
+                        )
+                    except TimeoutError:
+                        continue
                     if not chunk:
                         continue
                     await response.write(chunk)
 
-                await response.write_eof()
+                if not response.task or not response.task.done():
+                    await response.write_eof()
                 return response
         except aiohttp.ClientError as err:
             _LOGGER.debug("RemoteRelay MJPEG stream failed for %s: %s", self._camera_id, err)
