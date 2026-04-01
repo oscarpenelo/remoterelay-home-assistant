@@ -95,13 +95,19 @@ class RemoteRelayLocalApiClient:
         self,
         camera_id: str,
         *,
+        stream_format: str = "mjpeg",
         width: int | None = None,
         height: int | None = None,
         fps: int | None = None,
         access_token: str | None = None,
     ) -> str:
         safe_camera_id = quote(str(camera_id or "").strip(), safe="")
-        path = f"/ha/v1/cameras/{safe_camera_id}/stream.mjpeg"
+        normalized_stream_format = str(stream_format or "mjpeg").strip().lower()
+        path = (
+            f"/ha/v1/cameras/{safe_camera_id}/stream.ts"
+            if normalized_stream_format == "ts"
+            else f"/ha/v1/cameras/{safe_camera_id}/stream.mjpeg"
+        )
         query: dict[str, str] = {}
         token = str(access_token or self._token or "").strip()
         if token:

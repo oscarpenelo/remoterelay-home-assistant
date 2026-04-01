@@ -28,7 +28,8 @@ Copiar `custom_components/remoterelay` dentro de tu configuracion de Home Assist
 - `select.py`: selector de input source (Device page)
 - `sensor.py`: sensores numericos (predefinidos + custom `number`)
 - `binary_sensor.py`: sensores custom `binary`
-- `camera.py`: camaras (`screen` y `webcam`) con snapshot + `stream_source` MJPEG del daemon (para pipeline `stream`)
+- `camera.py`: camaras (`screen` y `webcam`) con snapshot on-demand + proxy MJPEG local de baja latencia
+- `switch.py`: switches por camara para habilitar/deshabilitar captura (`camera_capture_set`)
 
 ## UX en Home Assistant (importante)
 La integracion ya expone UI plug-and-play en la **Device page** (sin Lovelace manual) mediante:
@@ -41,12 +42,10 @@ La integracion ya expone UI plug-and-play en la **Device page** (sin Lovelace ma
 Home Assistant **no genera automaticamente** una card visual tipo "Apple TV Remote" como Apple Home.
 Para una UI tipo mando con D-pad en un dashboard, sigue siendo necesario crear una card Lovelace (manual).
 
-### Camaras + Alexa (importante)
-Para exponer camaras a Alexa desde Home Assistant, usa el pipeline oficial de HA:
-- habilita la integracion `stream` de Home Assistant;
-- configura URL externa HTTPS valida en Home Assistant Cloud/Nabu Casa.
+### Camaras (importante)
+En local, este componente prioriza `snapshot` directo + proxy MJPEG del daemon para reducir latencia en la UI de Home Assistant.
 
-En este componente, la entidad `camera` ya publica `stream_source` MJPEG para que HA lo procese con `stream`.
+El endpoint `stream.ts` del daemon se mantiene como compatibilidad para consumidores que prefieran MPEG-TS/HLS, pero ya no es el camino principal del componente.
 
 ### Ejemplo Lovelace (mando + sources)
 > Sustituye `media_player.current_pc` y `remote.current_pc_remote` por tus entity IDs reales.

@@ -1,23 +1,17 @@
-"""Camera entities for RemoteRelay webcam/screen snapshots and direct MJPEG live view."""
+"""Switch entities for RemoteRelay camera capture controls."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-import aiohttp
-from aiohttp import web
-from homeassistant.components.camera import Camera
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_web, async_get_clientsession
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import RemoteRelayApiError
 from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_camera_id(value: Any) -> str:
@@ -38,8 +32,8 @@ def _resolve_camera_definitions(data: dict[str, Any]) -> list[dict[str, str]]:
         if not camera_id or camera_id in seen:
             continue
         seen.add(camera_id)
-        name = str(item.get("name") or camera_id).strip() or camera_id
-        definitions.append({"id": camera_id, "name": name})
+        camera_name = str(item.get("name") or camera_id).strip() or camera_id
+        definitions.append({"id": camera_id, "name": camera_name})
     return definitions
 
 
@@ -60,22 +54,28 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up RemoteRelay camera entities."""
+    """Set up RemoteRelay camera capture switches."""
     runtime = hass.data[DOMAIN][entry.entry_id]
     coordinator = runtime["coordinator"]
     api = runtime["api"]
 
-    entities_by_id: dict[str, RemoteRelayCameraEntity] = {}
+    entities_by_id: dict[str, RemoteRelayCameraCaptureSwitch] = {}
 
     @callback
     def _sync_entities() -> None:
         definitions = _resolve_camera_definitions(coordinator.data or {})
-        to_add: list[RemoteRelayCameraEntity] = []
+        to_add: list[RemoteRelayCameraCaptureSwitch] = []
         for definition in definitions:
             camera_id = str(definition["id"])
             if camera_id in entities_by_id:
                 continue
-            entity = RemoteRelayCameraEntity(entry, coordinator, api, camera_id, str(definition["name"]))
+            entity = RemoteRelayCameraCaptureSwitch(
+                entry,
+                coordinator,
+                api,
+                camera_id,
+                str(definition["name"]),
+            )
             entities_by_id[camera_id] = entity
             to_add.append(entity)
         if to_add:
@@ -85,61 +85,54 @@ async def async_setup_entry(
     coordinator.async_add_listener(_sync_entities)
 
 
-class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
-    """Camera entity backed by daemon snapshot endpoint."""
+class RemoteRelayCameraCaptureSwitch(CoordinatorEntity, SwitchEntity):
+    """Switch that toggles camera capture for a specific camera source."""
 
     _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:camera-switch"
 
     def __init__(self, entry: ConfigEntry, coordinator, api, camera_id: str, camera_name: str) -> None:
-        CoordinatorEntity.__init__(self, coordinator)
-        Camera.__init__(self)
+        super().__init__(coordinator)
         self._entry = entry
         self._api = api
         self._camera_id = camera_id
-        self._attr_name = camera_name
-        self._attr_content_type = "image/jpeg"
+        self._camera_name = camera_name
+        self._attr_name = f"{camera_name} Capture"
         device_id = str(entry.data.get(CONF_DEVICE_ID) or "remoterelay").strip() or "remoterelay"
-        self._attr_unique_id = f"{device_id}-camera-{camera_id}"
+        self._attr_unique_id = f"{device_id}-camera-capture-{camera_id}"
 
     @property
     def available(self) -> bool:
-        # Keep camera entities available even if one coordinator refresh fails.
-        # Streaming/snapshots can still work while /device polling is intermittent.
-        return True
+        return bool(self.coordinator.last_update_success)
 
-    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
-        try:
-            return await self._api.async_get_camera_snapshot(self._camera_id, width=width, height=height)
-        except RemoteRelayApiError as err:
-            _LOGGER.debug("RemoteRelay camera snapshot failed for %s: %s", self._camera_id, err)
-            return None
+    @property
+    def is_on(self) -> bool:
+        camera_data = self._camera_data() or {}
+        return camera_data.get("captureEnabled", True) is not False
 
-    async def stream_source(self) -> str | None:
-        return self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_enabled(True)
 
-    async def handle_async_mjpeg_stream(self, request: web.Request) -> web.StreamResponse | None:
-        stream_url = self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
-        websession = async_get_clientsession(self.hass)
-        try:
-            return await async_aiohttp_proxy_web(self.hass, request, websession.get(stream_url))
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("RemoteRelay MJPEG stream failed for %s: %s", self._camera_id, err)
-            return None
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        await self._api.async_send_command(
+            {
+                "command": "camera_capture_set",
+                "cameraId": self._camera_id,
+                "enabled": bool(enabled),
+            }
+        )
+        await self.coordinator.async_request_refresh()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         camera_data = self._camera_data() or {}
-        stream_url = (
-            str(camera_data.get("streamUrl") or "").strip()
-            or f"/ha/v1/cameras/{self._camera_id}/stream.mjpeg"
-        )
-        snapshot_url = str(camera_data.get("snapshotUrl") or "").strip() or f"/ha/v1/cameras/{self._camera_id}/snapshot"
         return {
             "camera_id": self._camera_id,
             "camera_type": camera_data.get("cameraType"),
-            "capture_enabled": camera_data.get("captureEnabled", True),
-            "snapshot_url": snapshot_url,
-            "stream_url": stream_url,
             "screen_device_id": camera_data.get("screenDeviceId"),
             "webcam_device_id": camera_data.get("webcamDeviceId"),
         }
