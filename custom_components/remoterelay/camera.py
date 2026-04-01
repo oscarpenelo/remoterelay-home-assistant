@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -10,7 +11,7 @@ from aiohttp import web
 from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_web, async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -121,9 +122,38 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
         stream_url = self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
         websession = async_get_clientsession(self.hass)
         try:
-            return await async_aiohttp_proxy_web(self.hass, request, websession.get(stream_url))
+            async with websession.get(stream_url) as upstream:
+                if upstream.status >= 400:
+                    body = await upstream.text()
+                    return web.Response(
+                        status=upstream.status,
+                        text=body or f"Upstream MJPEG stream failed with status {upstream.status}",
+                    )
+
+                response = web.StreamResponse(
+                    status=upstream.status,
+                    headers={
+                        "Content-Type": upstream.headers.get(
+                            "Content-Type",
+                            "multipart/x-mixed-replace; boundary=ffmpeg",
+                        ),
+                        "Cache-Control": "no-store",
+                        "Pragma": "no-cache",
+                    },
+                )
+                await response.prepare(request)
+
+                async for chunk in upstream.content.iter_chunked(64 * 1024):
+                    if not chunk:
+                        continue
+                    await response.write(chunk)
+
+                await response.write_eof()
+                return response
         except aiohttp.ClientError as err:
             _LOGGER.debug("RemoteRelay MJPEG stream failed for %s: %s", self._camera_id, err)
+            return None
+        except (asyncio.CancelledError, ConnectionResetError):
             return None
 
     @property
