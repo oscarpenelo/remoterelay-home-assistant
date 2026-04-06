@@ -9,6 +9,12 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 from homeassistant.components.camera import Camera
+try:
+    from homeassistant.components.camera import CameraEntityFeature
+except ImportError:  # pragma: no cover - legacy Home Assistant compatibility
+    from homeassistant.components.camera import SUPPORT_STREAM as _SUPPORT_STREAM
+else:
+    _SUPPORT_STREAM = int(CameraEntityFeature.STREAM)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -90,6 +96,9 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
     """Camera entity backed by daemon snapshot endpoint."""
 
     _attr_should_poll = False
+    _attr_is_on = True
+    _attr_use_stream_for_stills = True
+    _attr_supported_features = _SUPPORT_STREAM
 
     def __init__(self, entry: ConfigEntry, coordinator, api, camera_id: str, camera_name: str) -> None:
         CoordinatorEntity.__init__(self, coordinator)
@@ -115,7 +124,14 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             _LOGGER.debug("RemoteRelay camera snapshot failed for %s: %s", self._camera_id, err)
             return None
 
+    @property
+    def is_streaming(self) -> bool:
+        camera_data = self._camera_data() or {}
+        return camera_data.get("captureEnabled", True) is not False
+
     async def stream_source(self) -> str | None:
+        if not self.is_streaming:
+            return None
         return self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
 
     async def handle_async_mjpeg_stream(self, request: web.Request) -> web.StreamResponse | None:
