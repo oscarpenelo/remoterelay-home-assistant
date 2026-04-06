@@ -19,6 +19,9 @@ from .api import RemoteRelayApiError
 from .const import CONF_DEVICE_ID, CONF_DISPLAY_NAME, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+_DEFAULT_STREAM_WIDTH = 960
+_DEFAULT_STREAM_HEIGHT = 540
+_DEFAULT_STREAM_FPS = 20
 
 
 def _normalize_camera_id(value: Any) -> str:
@@ -116,10 +119,22 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             return None
 
     async def stream_source(self) -> str | None:
-        return self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
+        return self._api.build_camera_stream_url(
+            self._camera_id,
+            stream_format="mjpeg",
+            width=_DEFAULT_STREAM_WIDTH,
+            height=_DEFAULT_STREAM_HEIGHT,
+            fps=_DEFAULT_STREAM_FPS,
+        )
 
     async def handle_async_mjpeg_stream(self, request: web.Request) -> web.StreamResponse | None:
-        stream_url = self._api.build_camera_stream_url(self._camera_id, stream_format="mjpeg")
+        stream_url = self._api.build_camera_stream_url(
+            self._camera_id,
+            stream_format="mjpeg",
+            width=_DEFAULT_STREAM_WIDTH,
+            height=_DEFAULT_STREAM_HEIGHT,
+            fps=_DEFAULT_STREAM_FPS,
+        )
         websession = async_get_clientsession(self.hass)
         try:
             async with websession.get(stream_url) as upstream:
