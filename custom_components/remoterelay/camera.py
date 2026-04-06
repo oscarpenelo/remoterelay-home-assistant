@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 from typing import Any
 
 import aiohttp
@@ -118,15 +119,6 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             _LOGGER.debug("RemoteRelay camera snapshot failed for %s: %s", self._camera_id, err)
             return None
 
-    async def stream_source(self) -> str | None:
-        return self._api.build_camera_stream_url(
-            self._camera_id,
-            stream_format="mjpeg",
-            width=_DEFAULT_STREAM_WIDTH,
-            height=_DEFAULT_STREAM_HEIGHT,
-            fps=_DEFAULT_STREAM_FPS,
-        )
-
     async def handle_async_mjpeg_stream(self, request: web.Request) -> web.StreamResponse | None:
         stream_url = self._api.build_camera_stream_url(
             self._camera_id,
@@ -136,53 +128,65 @@ class RemoteRelayCameraEntity(CoordinatorEntity, Camera):
             fps=_DEFAULT_STREAM_FPS,
         )
         websession = async_get_clientsession(self.hass)
+        upstream: aiohttp.ClientResponse | None = None
+        response: web.StreamResponse | None = None
         try:
-            async with websession.get(stream_url) as upstream:
-                if upstream.status >= 400:
-                    body = await upstream.text()
-                    return web.Response(
-                        status=upstream.status,
-                        text=body or f"Upstream MJPEG stream failed with status {upstream.status}",
-                    )
-
-                response = web.StreamResponse(
+            upstream = await websession.get(
+                stream_url,
+                timeout=aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=10),
+            )
+            if upstream.status >= 400:
+                body = await upstream.text()
+                return web.Response(
                     status=upstream.status,
-                    headers={
-                        "Content-Type": upstream.headers.get(
-                            "Content-Type",
-                            "multipart/x-mixed-replace; boundary=ffmpeg",
-                        ),
-                        "Cache-Control": "no-store",
-                        "Pragma": "no-cache",
-                    },
+                    text=body or f"Upstream MJPEG stream failed with status {upstream.status}",
                 )
-                await response.prepare(request)
 
-                while True:
-                    transport = request.transport
-                    if transport is None or transport.is_closing():
-                        break
-                    if upstream.content.at_eof():
-                        break
-                    try:
-                        chunk = await asyncio.wait_for(
-                            upstream.content.readany(),
-                            timeout=1.0,
-                        )
-                    except TimeoutError:
-                        continue
-                    if not chunk:
-                        continue
+            response = web.StreamResponse(
+                status=upstream.status,
+                headers={
+                    "Content-Type": upstream.headers.get(
+                        "Content-Type",
+                        "multipart/x-mixed-replace; boundary=ffmpeg",
+                    ),
+                    "Cache-Control": "no-store",
+                    "Pragma": "no-cache",
+                },
+            )
+            await response.prepare(request)
+
+            while True:
+                transport = request.transport
+                if transport is None or transport.is_closing():
+                    break
+                request_task = getattr(request, "task", None)
+                if request_task is not None and request_task.done():
+                    break
+                if upstream.content.at_eof():
+                    break
+                try:
+                    chunk = await asyncio.wait_for(upstream.content.readany(), timeout=1.0)
+                except TimeoutError:
+                    continue
+                if not chunk:
+                    continue
+                try:
                     await response.write(chunk)
+                except (ConnectionResetError, BrokenPipeError, RuntimeError):
+                    break
 
-                if not response.task or not response.task.done():
-                    await response.write_eof()
-                return response
+            return response
         except aiohttp.ClientError as err:
             _LOGGER.debug("RemoteRelay MJPEG stream failed for %s: %s", self._camera_id, err)
             return None
         except (asyncio.CancelledError, ConnectionResetError):
             return None
+        finally:
+            if upstream is not None:
+                upstream.close()
+            if response is not None and response.prepared:
+                with suppress(ConnectionResetError, BrokenPipeError, RuntimeError):
+                    await response.write_eof()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
