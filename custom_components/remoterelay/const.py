@@ -11,6 +11,7 @@ DEFAULT_POLL_INTERVAL_SECONDS = 5
 CONF_DEVICE_ID = "device_id"
 CONF_DISPLAY_NAME = "display_name"
 CONF_ACCESS_TOKEN = "access_token"
+CONF_INTEGRATION_INSTANCE_ID = "integration_instance_id"
 CONF_TOKEN_EXPIRES_AT = "token_expires_at"
 CONF_MAC_ADDRESSES = "mac_addresses"
 CONF_INPUT_SOURCES = "input_sources"

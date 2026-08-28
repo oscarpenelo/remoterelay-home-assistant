@@ -24,6 +24,13 @@
         "data": {
           "pairing_code": "Pairing code"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate RemoteRelay",
+        "description": "Home Assistant can no longer authenticate with {name} ({host}:{port}). Generate a fresh Home Assistant pairing code in RemoteRelay Desktop and enter it here.",
+        "data": {
+          "pairing_code": "Pairing code"
+        }
       }
     },
     "error": {
@@ -34,7 +41,10 @@
     "abort": {
       "already_configured": "This RemoteRelay device is already configured.",
       "already_in_progress": "A RemoteRelay setup flow is already running. Close the current dialog first, then retry.",
+      "cannot_connect": "Failed to connect to the RemoteRelay daemon.",
       "not_supported": "The discovered service is missing required RemoteRelay metadata.",
+      "reauth_successful": "RemoteRelay was reauthenticated successfully.",
+      "wrong_device": "The discovered RemoteRelay endpoint belongs to a different device. The existing Home Assistant device was not changed.",
       "wait_for_discovery": "This wizard does not keep waiting in background. Steps: (1) Open RemoteRelay Desktop, (2) enable Home Assistant, (3) in Home Assistant wait for the discovered device notification, or use manual setup with host/port."
     }
   }

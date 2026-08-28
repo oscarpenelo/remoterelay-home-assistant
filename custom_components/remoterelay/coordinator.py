@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import RemoteRelayApiError, RemoteRelayLocalApiClient
@@ -28,6 +29,7 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             logger=hass.data[DOMAIN]["logger"],
+            config_entry=entry,
             name=f"{DOMAIN}_device_profile",
             update_interval=timedelta(seconds=DEFAULT_POLL_INTERVAL_SECONDS),
         )
@@ -40,6 +42,10 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._async_maybe_sync_config_entry(profile)
             return profile
         except RemoteRelayApiError as err:
+            if err.status == 401:
+                raise ConfigEntryAuthFailed(
+                    "RemoteRelay local access token is invalid or revoked."
+                ) from err
             raise UpdateFailed(str(err)) from err
 
     async def _async_maybe_sync_config_entry(self, profile: dict[str, Any]) -> None:
@@ -51,7 +57,15 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         changed = False
 
         profile_device_id = str(profile.get("deviceId") or "").strip()
-        if profile_device_id and profile_device_id != str(current_data.get(CONF_DEVICE_ID) or ""):
+        current_device_id = str(current_data.get(CONF_DEVICE_ID) or "").strip()
+        entry_unique_id = str(self.entry.unique_id or "").strip()
+        expected_device_id = entry_unique_id or current_device_id
+        if profile_device_id and expected_device_id and profile_device_id != expected_device_id:
+            raise UpdateFailed(
+                "RemoteRelay device identity mismatch: "
+                f"expected {expected_device_id}, received {profile_device_id}."
+            )
+        if profile_device_id and profile_device_id != current_device_id:
             next_data[CONF_DEVICE_ID] = profile_device_id
             changed = True
 

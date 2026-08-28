@@ -24,6 +24,13 @@
         "data": {
           "pairing_code": "Codi de vinculació"
         }
+      },
+      "reauth_confirm": {
+        "title": "Tornar a autenticar RemoteRelay",
+        "description": "Home Assistant ja no es pot autenticar amb {name} ({host}:{port}). Genera un codi de vinculació nou de Home Assistant a RemoteRelay Desktop i introdueix-lo aquí.",
+        "data": {
+          "pairing_code": "Codi de vinculació"
+        }
       }
     },
     "error": {
@@ -34,7 +41,10 @@
     "abort": {
       "already_configured": "Aquest dispositiu RemoteRelay ja està configurat.",
       "already_in_progress": "Ja hi ha una configuració de RemoteRelay en curs. Tanca el diàleg actual i torna-ho a provar.",
+      "cannot_connect": "No s'ha pogut connectar amb el daemon de RemoteRelay.",
       "not_supported": "El servei descobert no inclou les metadades requerides de RemoteRelay.",
+      "reauth_successful": "RemoteRelay s'ha tornat a autenticar correctament.",
+      "wrong_device": "L'endpoint de RemoteRelay descobert pertany a un altre dispositiu. El dispositiu existent de Home Assistant no s'ha modificat.",
       "wait_for_discovery": "Aquest assistent no es queda esperant en segon pla. Passos: (1) Obre RemoteRelay Desktop, (2) activa Home Assistant, (3) a Home Assistant espera la notificació de dispositiu descobert o usa la configuració manual amb host/port."
     }
   }

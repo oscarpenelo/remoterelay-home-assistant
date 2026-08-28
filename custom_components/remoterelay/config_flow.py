@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import logging
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import voluptuous as vol
@@ -21,9 +23,11 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DISPLAY_NAME,
     CONF_INPUT_SOURCES,
+    CONF_INTEGRATION_INSTANCE_ID,
     CONF_MAC_ADDRESSES,
     CONF_PROTO_VERSION,
     CONF_SELECTED_SOURCE_ID,
+    CONF_TOKEN_EXPIRES_AT,
     DEFAULT_API_PORT,
     DOMAIN,
 )
@@ -44,6 +48,7 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovered_device_id: str | None = None
         self._discovered_display_name: str | None = None
         self._discovered_proto: str = "1"
+        self._integration_instance_id = str(uuid4())
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Zeroconf-first entry point."""
@@ -95,16 +100,18 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         discovered_hosts = self._resolve_discovery_hosts(discovery_info)
         discovered_host = discovered_hosts[0] if discovered_hosts else ""
         discovered_port = int(getattr(discovery_info, "port", DEFAULT_API_PORT))
+
+        if not discovered_host:
+            return self.async_abort(reason="cannot_connect")
+
         await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured(
             updates={
                 CONF_HOST: discovered_host,
                 CONF_PORT: discovered_port,
+                CONF_API_BASE_URL: self._build_base_url(discovered_host, discovered_port),
             }
         )
-
-        if not discovered_host:
-            return self.async_abort(reason="cannot_connect")
 
         self._pending_host = discovered_host
         self._pending_host_candidates = discovered_hosts
@@ -112,11 +119,77 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return await self.async_step_pair()
 
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> FlowResult:
+        """Start reauthentication for an entry with an invalid local token."""
+        entry = self._get_reauth_entry()
+        data = entry.data
+
+        stored_base_url = str(data.get(CONF_API_BASE_URL) or "").strip()
+        parsed_host = ""
+        parsed_port: int | None = None
+        if stored_base_url:
+            try:
+                parsed = urlsplit(stored_base_url)
+                parsed_host = str(parsed.hostname or "").strip()
+                parsed_port = parsed.port
+            except ValueError:
+                _LOGGER.warning(
+                    "RemoteRelay config entry %s has an invalid API base URL.",
+                    entry.entry_id,
+                )
+
+        self._pending_host = self._normalize_host(data.get(CONF_HOST)) or parsed_host
+        self._pending_host_candidates = [self._pending_host] if self._pending_host else []
+        try:
+            self._pending_port = int(data.get(CONF_PORT) or parsed_port or DEFAULT_API_PORT)
+        except (TypeError, ValueError):
+            self._pending_port = parsed_port or DEFAULT_API_PORT
+
+        self._discovered_device_id = str(
+            entry.unique_id or data.get(CONF_DEVICE_ID) or ""
+        ).strip() or None
+        self._discovered_display_name = str(
+            data.get(CONF_DISPLAY_NAME) or entry.title or "RemoteRelay"
+        ).strip()
+        self._discovered_proto = str(data.get(CONF_PROTO_VERSION) or "1").strip() or "1"
+        stored_instance_id = str(data.get(CONF_INTEGRATION_INSTANCE_ID) or "").strip()
+        if stored_instance_id:
+            self._integration_instance_id = stored_instance_id
+        else:
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_INTEGRATION_INSTANCE_ID: self._integration_instance_id,
+                },
+            )
+
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Exchange a fresh pairing code without replacing the config entry."""
+        return await self._async_pairing_step(user_input, step_id="reauth_confirm")
+
     async def async_step_pair(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Exchange local pairing code for a token."""
+        return await self._async_pairing_step(user_input, step_id="pair")
+
+    async def _async_pairing_step(
+        self,
+        user_input: dict[str, Any] | None,
+        *,
+        step_id: str,
+    ) -> FlowResult:
+        """Exchange a pairing code for initial setup or reauthentication."""
         errors: dict[str, str] = {}
 
         if not self._pending_host:
+            if self.source == config_entries.SOURCE_REAUTH:
+                return self.async_abort(reason="cannot_connect")
             return await self.async_step_user()
 
         if user_input is not None:
@@ -124,11 +197,14 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             pairing_code = str(user_input[CONF_PAIRING_CODE]).strip()
             candidate_hosts = self._connection_candidates()
             last_pairing_error: str | None = None
+            wrong_device_detected = False
+            expected_device_id = str(self._discovered_device_id or "").strip()
 
             for candidate_host in candidate_hosts:
                 base_url = self._build_base_url(candidate_host, self._pending_port)
                 api = RemoteRelayLocalApiClient(session=session, base_url=base_url)
                 paired: dict[str, Any] | None = None
+                health: dict[str, Any] = {}
                 try:
                     health = await api.async_health()
                     if not bool(health.get("pairingEnabled")):
@@ -140,9 +216,25 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         )
                         continue
 
+                    health_device_id = str(health.get("deviceId") or "").strip()
+                    if (
+                        expected_device_id
+                        and health_device_id
+                        and health_device_id != expected_device_id
+                    ):
+                        wrong_device_detected = True
+                        _LOGGER.warning(
+                            "RemoteRelay pairing candidate %s:%s belongs to device %s, expected %s.",
+                            candidate_host,
+                            self._pending_port,
+                            health_device_id,
+                            expected_device_id,
+                        )
+                        continue
+
                     paired = await api.async_exchange_pairing_code(
                         pairing_code=pairing_code,
-                        integration_instance_id=str(uuid4()),
+                        integration_instance_id=self._integration_instance_id,
                     )
                 except RemoteRelayPairingError as err:
                     if err.code in {"invalid_pairing_code", "invalid_request"}:
@@ -188,18 +280,73 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._pending_host = candidate_host
                 self._pending_host_candidates = [candidate_host]
                 device = paired.get("device", {})
-                device_id = str(device.get("deviceId") or self._discovered_device_id or uuid4())
+                if not isinstance(device, dict):
+                    continue
+
+                device_id = str(
+                    device.get("deviceId")
+                    or health.get("deviceId")
+                    or self._discovered_device_id
+                    or ""
+                ).strip()
+                access_token = str(paired.get("accessToken") or "").strip()
+                if not device_id or not access_token:
+                    _LOGGER.warning(
+                        "RemoteRelay pairing response from %s:%s is missing identity or token.",
+                        candidate_host,
+                        self._pending_port,
+                    )
+                    continue
+
+                if expected_device_id and device_id != expected_device_id:
+                    wrong_device_detected = True
+                    _LOGGER.warning(
+                        "RemoteRelay pairing response belongs to device %s, expected %s.",
+                        device_id,
+                        expected_device_id,
+                    )
+                    continue
+
+                if self.source == config_entries.SOURCE_REAUTH:
+                    entry = self._get_reauth_entry()
+                    entry_unique_id = str(entry.unique_id or "").strip()
+                    entry_device_id = str(entry.data.get(CONF_DEVICE_ID) or "").strip()
+                    preserved_device_id = entry_unique_id or entry_device_id
+                    if preserved_device_id and device_id != preserved_device_id:
+                        return self.async_abort(reason="wrong_device")
+
+                    if entry_unique_id:
+                        await self.async_set_unique_id(device_id)
+                        self._abort_if_unique_id_mismatch(reason="wrong_device")
+
+                    data_updates: dict[str, Any] = {
+                        CONF_ACCESS_TOKEN: access_token,
+                        CONF_INTEGRATION_INSTANCE_ID: self._integration_instance_id,
+                        CONF_API_BASE_URL: base_url,
+                        CONF_HOST: candidate_host,
+                        CONF_PORT: self._pending_port,
+                    }
+                    if "expiresAt" in paired:
+                        data_updates[CONF_TOKEN_EXPIRES_AT] = paired.get("expiresAt")
+
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates=data_updates,
+                    )
+
                 current_unique_id = getattr(self, "unique_id", None)
                 if current_unique_id is None:
                     await self.async_set_unique_id(device_id)
                 elif str(current_unique_id) != device_id:
-                    return self.async_abort(reason="already_configured")
+                    return self.async_abort(reason="wrong_device")
                 self._abort_if_unique_id_configured()
 
                 title = str(device.get("displayName") or self._discovered_display_name or "RemoteRelay")
                 data = {
                     CONF_API_BASE_URL: base_url,
-                    CONF_ACCESS_TOKEN: paired.get("accessToken"),
+                    CONF_ACCESS_TOKEN: access_token,
+                    CONF_INTEGRATION_INSTANCE_ID: self._integration_instance_id,
+                    CONF_TOKEN_EXPIRES_AT: paired.get("expiresAt"),
                     CONF_DEVICE_ID: device_id,
                     CONF_DISPLAY_NAME: title,
                     CONF_MAC_ADDRESSES: [m.get("value") for m in device.get("macAddresses", []) if isinstance(m, dict)],
@@ -212,6 +359,8 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=title, data=data)
 
             if "base" not in errors:
+                if wrong_device_detected:
+                    return self.async_abort(reason="wrong_device")
                 errors["base"] = last_pairing_error or "cannot_connect"
 
         schema = vol.Schema({vol.Required(CONF_PAIRING_CODE): str})
@@ -221,7 +370,7 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "name": self._discovered_display_name or "RemoteRelay",
         }
         return self.async_show_form(
-            step_id="pair",
+            step_id=step_id,
             data_schema=schema,
             errors=errors,
             description_placeholders=placeholders,
