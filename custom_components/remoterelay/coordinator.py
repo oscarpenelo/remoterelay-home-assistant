@@ -73,6 +73,11 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if profile_display_name and profile_display_name != str(current_data.get(CONF_DISPLAY_NAME) or ""):
             next_data[CONF_DISPLAY_NAME] = profile_display_name
             changed = True
+        title_changed = bool(
+            profile_display_name and profile_display_name != str(self.entry.title or "").strip()
+        )
+        if title_changed:
+            changed = True
 
         if "macAddresses" in profile:
             profile_macs = self._normalize_profile_macs(profile.get("macAddresses"))
@@ -96,7 +101,11 @@ class RemoteRelayCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 changed = True
 
         if changed:
-            self.hass.config_entries.async_update_entry(self.entry, data=next_data)
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                data=next_data,
+                **({"title": profile_display_name} if title_changed else {}),
+            )
 
     @staticmethod
     def _normalize_profile_macs(value: Any) -> list[str]:

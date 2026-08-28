@@ -110,6 +110,7 @@ class RemoteRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_HOST: discovered_host,
                 CONF_PORT: discovered_port,
                 CONF_API_BASE_URL: self._build_base_url(discovered_host, discovered_port),
+                CONF_DISPLAY_NAME: self._discovered_display_name,
             }
         )
 

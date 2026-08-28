@@ -73,11 +73,17 @@ class FakeConfigEntriesManager:
         self.updates: list[tuple[FakeConfigEntry, dict[str, Any]]] = []
 
     def async_update_entry(
-        self, entry: FakeConfigEntry, *, data: dict[str, Any]
+        self,
+        entry: FakeConfigEntry,
+        *,
+        data: dict[str, Any] | None = None,
+        title: str | None = None,
     ) -> bool:
-        next_data = dict(data)
-        changed = next_data != entry.data
+        next_data = dict(entry.data if data is None else data)
+        changed = next_data != entry.data or (title is not None and title != entry.title)
         entry.data = next_data
+        if title is not None:
+            entry.title = title
         self.updates.append((entry, next_data))
         return changed
 

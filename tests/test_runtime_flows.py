@@ -106,6 +106,7 @@ class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
                 CONFIG_FLOW.CONF_HOST: "192.0.2.25",
                 CONFIG_FLOW.CONF_PORT: 49172,
                 CONST.CONF_API_BASE_URL: "http://192.0.2.25:49172",
+                CONST.CONF_DISPLAY_NAME: "Office PC",
             },
         )
 
@@ -323,6 +324,30 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(UpdateFailed):
             await coordinator._async_update_data()
+
+    async def test_profile_rename_updates_config_entry_data_and_title(self) -> None:
+        class RenamedDeviceApi:
+            async def async_get_device_profile(self) -> dict[str, Any]:
+                return {
+                    "deviceId": "device-1",
+                    "displayName": "Windows Server",
+                }
+
+        self.entry.title = "Current PC"
+        self.entry.data[CONST.CONF_DISPLAY_NAME] = "Current PC"
+        coordinator = COORDINATOR.RemoteRelayCoordinator(
+            self.hass, self.entry, RenamedDeviceApi()
+        )
+
+        profile = await coordinator._async_update_data()
+
+        self.assertEqual(profile["displayName"], "Windows Server")
+        self.assertEqual(
+            self.entry.data[CONST.CONF_DISPLAY_NAME], "Windows Server"
+        )
+        self.assertEqual(self.entry.title, "Windows Server")
+        self.assertEqual(self.entry.unique_id, "device-1")
+        self.assertEqual(len(self.hass.config_entries.updates), 1)
 
     async def test_device_identity_mismatch_is_not_persisted(self) -> None:
         class WrongDeviceApi:
